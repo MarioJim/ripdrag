@@ -35,7 +35,6 @@ jobs:
         with:
           command: check
 
-
   # We need some "accummulation" job here because bors fails (timeouts) to
   # listen on matrix builds.
   # Hence, we have some kind of dummy here that bors can listen on
