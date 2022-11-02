@@ -86,8 +86,8 @@ pub fn build_target_ui(list_box: ListBox, args: Cli) {
                     paths.append(&mut new_paths);
                     list_box.append(&generate_compact(paths.clone(), args.and_exit));
                 } else {
-                    // This solution is fast, but it's gonna cause problems when --all is used in combinatio with --target
-                    for button in &generate_buttons_from_paths(
+                    // This solution is fast, but it's gonna cause problems when --all is used in combination with --target
+                    for button in generate_buttons_from_paths(
                         new_paths,
                         args.and_exit,
                         args.icons_only,
@@ -95,7 +95,7 @@ pub fn build_target_ui(list_box: ListBox, args: Cli) {
                         args.icon_size,
                         args.all,
                     ) {
-                        list_box.append(button);
+                        list_box.append(&button);
                     }
                 }
                 Continue(true)

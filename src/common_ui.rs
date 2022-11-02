@@ -13,19 +13,8 @@ pub fn generate_compact(paths: Vec<PathBuf>, and_exit: bool) -> Button {
     let button = Button::builder()
         .label(&format!("{} elements", paths.len()))
         .build();
-    let drag_source = DragSource::builder().build();
-
-    drag_source.connect_prepare(move |_, _, _| {
-        Some(ContentProvider::for_bytes(
-            "text/uri-list",
-            &generate_uri_list(&paths),
-        ))
-    });
-
-    if and_exit {
-        drag_source.connect_drag_end(|_, _, _| std::process::exit(0));
-    }
-    button.add_controller(&drag_source);
+    let uri_bytes = uri_list_to_bytes(&paths);
+    button.add_controller(&drag_source_for_uri_bytes(uri_bytes, and_exit));
     button
 }
 
@@ -36,12 +25,11 @@ pub fn generate_buttons_from_paths(
     disable_thumbnails: bool,
     icon_size: i32,
     all: bool,
-) -> Vec<Button> {
-    let mut button_vec = Vec::new();
-    let uri_list = generate_uri_list(&paths);
+) -> impl Iterator<Item = Button> {
+    let uri_list = uri_list_to_bytes(&paths);
 
-    //TODO: make this loop multithreaded
-    for path in paths.into_iter() {
+    // TODO: make this loop multithreaded
+    paths.into_iter().map(move |path| {
         // The CenterBox(button_box) contains the image and the optional label
         // The Button contains the CenterBox and can be dragged
         let button_box = CenterBox::builder()
@@ -64,59 +52,41 @@ pub fn generate_buttons_from_paths(
             ));
         }
 
-        let button = Button::builder().child(&button_box).build();
-        let drag_source = DragSource::builder().build();
-
-        if all {
-            let list = uri_list.clone();
-            drag_source.connect_prepare(move |_, _, _| {
-                Some(ContentProvider::for_bytes("text/uri-list", &list))
-            });
+        let uri_bytes = if all {
+            uri_list.clone()
         } else {
-            let uri = generate_uri_from_path(&path);
-            drag_source.connect_prepare(move |_, _, _| {
-                Some(ContentProvider::for_bytes("text/uri-list", &uri))
-            });
-        }
-
-        if and_exit {
-            drag_source.connect_drag_end(|_, _, _| std::process::exit(0));
-        }
+            uri_list_to_bytes(&[path.clone()])
+        };
+        let button = Button::builder().child(&button_box).build();
+        button.add_controller(&drag_source_for_uri_bytes(uri_bytes, and_exit));
 
         // Open the path with the default app
         button.connect_clicked(move |_| {
-            opener::open(&path).unwrap();
+            if let Err(error) = opener::open(&path) {
+                eprintln!("Error opening {}:\n{}", path.display(), error);
+            }
         });
 
-        button.add_controller(&drag_source);
-        button_vec.push(button);
-    }
-    button_vec
+        button
+    })
 }
 
-fn get_image_from_path(
-    path: &std::path::PathBuf,
-    icon_size: i32,
-    disable_thumbnails: bool,
-) -> Option<Image> {
+fn get_image_from_path(path: &Path, icon_size: i32, disable_thumbnails: bool) -> Option<Image> {
     let mime_type = if path.metadata().unwrap().is_dir() {
         "inode/directory"
     } else {
-        match infer::get_from_path(path) {
-            Ok(option) => match option {
-                Some(infer_type) => infer_type.mime_type(),
-                None => "text/plain",
-            },
-            Err(_) => "text/plain",
-        }
+        infer::get_from_path(path)
+            .ok()
+            .flatten()
+            .map_or("text/plain", |infer_type| infer_type.mime_type())
     };
+
     if mime_type.contains("image") & !disable_thumbnails {
-        Some(
-            Image::builder()
-                .file(path.as_os_str().to_str().unwrap())
-                .pixel_size(icon_size)
-                .build(),
-        )
+        let image = Image::builder()
+            .file(path.to_string_lossy().as_ref())
+            .pixel_size(icon_size)
+            .build();
+        Some(image)
     } else {
         gtk::gio::content_type_get_generic_icon_name(mime_type).map(|icon_name| {
             Image::builder()
@@ -127,22 +97,30 @@ fn get_image_from_path(
     }
 }
 
-fn generate_uri_from_path(path: &Path) -> Bytes {
-    Bytes::from_owned(uri_from_path(path))
+fn drag_source_for_uri_bytes(uri_bytes: Bytes, and_exit: bool) -> DragSource {
+    let drag_source = DragSource::builder().build();
+
+    drag_source.connect_prepare(move |_, _, _| {
+        Some(ContentProvider::for_bytes("text/uri-list", &uri_bytes))
+    });
+
+    if and_exit {
+        drag_source.connect_drag_end(|_, _, _| std::process::exit(0));
+    }
+
+    drag_source
 }
 
-fn generate_uri_list(paths: &[PathBuf]) -> Bytes {
-    let uris = paths
+fn uri_list_to_bytes(paths: &[PathBuf]) -> Bytes {
+    let uris_string = paths
         .iter()
-        .map(|path| uri_from_path(path))
-        .reduce(|accum, item| [accum, item].join("\n"))
-        .unwrap();
-
-    Bytes::from_owned(uris)
-}
-
-fn uri_from_path(path: &Path) -> String {
-    Url::from_file_path(path.canonicalize().unwrap())
-        .unwrap()
-        .to_string()
+        .map(|path| {
+            let canonicalized_path = path
+                .canonicalize()
+                .expect("Error getting the an absolute path");
+            Url::from_file_path(canonicalized_path).unwrap().to_string()
+        })
+        .collect::<Vec<String>>()
+        .join("\n");
+    Bytes::from_owned(uris_string)
 }

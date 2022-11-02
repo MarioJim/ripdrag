@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 /// Drag and Drop files to and from the terminal
 #[derive(clap::Parser)]
 #[clap(about)]
@@ -72,5 +74,5 @@ pub struct Cli {
 
     /// Paths to the files you want to drag
     #[clap(parse(from_os_str))]
-    pub paths: Vec<std::path::PathBuf>,
+    pub paths: Vec<PathBuf>,
 }

@@ -70,8 +70,8 @@ pub fn build_source_ui(list_box: ListBox, args: Cli) {
                             args.disable_thumbnails,
                             args.icon_size,
                             args.all,
-                        );
-                        list_box.append(&button[0]);
+                        ).next().unwrap();
+                        list_box.append(&button);
                     }
                     Continue(true)
                 }

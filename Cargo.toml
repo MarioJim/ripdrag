@@ -9,11 +9,10 @@ edition = "2021"
 license-file = "LICENSE"
 categories = ["command-line-utilities"]
 exclude = ["/.vscode"]
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.2.20", features = ["derive"] }
-gtk = { version = "0.4.8" , package = "gtk4"}
-infer = "0.9"
+clap = { version = "3.2", features = ["derive"] }
+gtk = { version = "0.5", package = "gtk4" }
+infer = "0.11"
 opener = "0.5"
 url = "2.3.1"
